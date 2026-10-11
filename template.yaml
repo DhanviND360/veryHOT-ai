@@ -1,0 +1,51 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: veryHOT.ai FastAPI backend
+
+Globals:
+  Function:
+    Runtime: python3.12
+    Architectures: [x86_64]
+    Timeout: 20
+    MemorySize: 256
+    Environment:
+      Variables:
+        CORS_ORIGINS: !Ref CorsOrigins
+        REQUEST_TIMEOUT_SECONDS: '8'
+        CACHE_TTL_SECONDS: '300'
+        CACHE_MAX_ENTRIES: '128'
+
+Parameters:
+  CorsOrigins:
+    Type: String
+    Default: '*'
+    Description: Comma-separated frontend origins; set the deployed frontend origin for production.
+
+Resources:
+  VeryHotApi:
+    Type: AWS::Serverless::Function
+    Properties:
+      CodeUri: .
+      Handler: lambda_handler.handler
+      Events:
+        Api:
+          Type: HttpApi
+          Properties:
+            Path: /{proxy+}
+            Method: ANY
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins: !Split [',', !Ref CorsOrigins]
+          AllowMethods: [GET]
+          AllowHeaders: [content-type]
+    Metadata:
+      BuildMethod: python3.12
+
+Outputs:
+  FunctionUrl:
+    Description: Public HTTPS Lambda Function URL
+    Value: !GetAtt VeryHotApiUrl.FunctionUrl
+  HttpApiUrl:
+    Description: API Gateway HTTP API URL
+    Value: !Sub 'https://${ServerlessHttpApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/'

@@ -1,0 +1,11 @@
+{
+  "location": {"latitude": 17.385, "longitude": 78.486, "display_name": "Hyderabad"},
+  "current": {"temperature_c": 34.1, "relative_humidity_pct": 58.0, "apparent_temperature_c": 39.2, "wind_speed_kmh": 8.5, "precipitation_mm": 0.0, "timestamp": "2026-10-11T14:00+05:30"},
+  "hourly": [{"timestamp": "2026-10-11T14:00+05:30", "temperature_c": 34.1, "relative_humidity_pct": 58.0, "apparent_temperature_c": 39.2, "wind_speed_kmh": 8.5, "precipitation_mm": 0.0}],
+  "daily": [{"date": "2026-10-11", "temperature_max_c": 35.0, "temperature_min_c": 25.4, "apparent_temperature_max_c": 39.2, "apparent_temperature_min_c": 26.0, "precipitation_sum_mm": 0.0}],
+  "heat_assessment": {"level": "elevated", "methodology": "Illustrative app-defined bands; see API methodology.", "explanation": "Illustrative sample only.", "contributing_values": {"temperature_c": 34.1, "apparent_temperature_c": 39.2, "relative_humidity_pct": 58.0, "wind_speed_kmh": 8.5}, "limitations": ["Sample values are not live weather or medical guidance."], "guidance": ["Seek shade and drink water regularly."]},
+  "official_warning": {"status": "unavailable", "details": [], "issued_at": null, "valid_until": null, "source_name": "India Meteorological Department", "source_url": "https://api.imd.gov.in/public/api_reference.html"},
+  "precautions": ["Drink water regularly, seek shade, and reduce strenuous outdoor activity during hot periods."],
+  "sources": [{"provider": "Open-Meteo", "url": "https://open-meteo.com/en/docs", "fetched_at": "2026-10-11T08:30:00Z", "freshness_seconds": null}],
+  "errors": []
+}
