@@ -13,7 +13,7 @@ from typing import Any, Literal
 from zoneinfo import ZoneInfo
 
 import httpx
-from fastapi import FastAPI, Query
+from fastapi import FastAPI, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -340,6 +340,21 @@ app = FastAPI(title="veryHOT.ai API", version=APP_VERSION,
               description="Hyderabad-focused heat and water intelligence API. Weather forecasts are provided by Open-Meteo; official warning and verified local cooling/water datasets are currently unavailable.")
 origins = [origin.strip() for origin in os.getenv("CORS_ORIGINS", "*").split(",") if origin.strip()]
 app.add_middleware(CORSMiddleware, allow_origins=origins or ["*"], allow_methods=["GET"], allow_headers=["*"])
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=204)
+
+
+@app.get("/", tags=["system"])
+async def root() -> dict[str, Any]:
+    return {
+        "service": "veryHOT.ai",
+        "version": APP_VERSION,
+        "docs": "docs",
+        "endpoints": ["health", "api/v1/outlook", "api/v1/water-locations"],
+    }
 
 
 @app.get("/health", tags=["system"])
