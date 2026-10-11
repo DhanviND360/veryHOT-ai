@@ -85,7 +85,7 @@ function classifyQuestion(question: string): string {
   const text = question.toLowerCase();
   if (/\b(water|drinking|hydration|water point|tap|fountain)\b/.test(text)) return "water";
   if (/\b(warning|alert|imd|official)\b/.test(text)) return "official_warning";
-  if (/\b(hour|hourly|later|forecast|today|tomorrow|peak|afternoon)\b/.test(text)) return "forecast";
+  if (/\b(hour|hourly|later|forecast|today|tomorrow|peak|afternoon|next|change)\b/.test(text)) return "forecast";
   if (/\b(humid|humidity|moist|muggy)\b/.test(text)) return "humidity";
   if (/\b(what should|how can|protect|safe|precaution|advice|guidance|vulnerable|child|elder|outdoor)\b/.test(text)) return "guidance";
   return "conditions";
@@ -123,32 +123,38 @@ export async function POST(request: NextRequest) {
       water: ["water"],
       guidance: ["assessment", "guidance-0", "guidance-1", "precaution-0", "precaution-1"],
     };
-    const gemini = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      signal: AbortSignal.timeout(15000),
-      body: JSON.stringify({
-        systemInstruction: { parts: [{ text: "Classify the user's question for a grounded Hyderabad heat companion. Return only strict JSON with one topic. Allowed topics: conditions, humidity, forecast, official_warning, water, guidance. Never answer the question, add facts, or infer health advice." }] },
-        contents: [{ role: "user", parts: [{ text: question }] }],
-        generationConfig: {
-          temperature: 0,
-          maxOutputTokens: 120,
-          responseMimeType: "application/json",
-          responseSchema: { type: "OBJECT", properties: { topic: { type: "STRING", enum: Object.keys(topicFactIds) } }, required: ["topic"] },
-        },
-      }),
-    });
-    if (!gemini.ok) throw new Error("gemini");
-    const rawSelection = modelText(await gemini.json());
-    let topic = "";
+    let topic = classifyQuestion(question);
     try {
-      const json = rawSelection.match(/\{[\s\S]*\}/)?.[0] ?? rawSelection;
-      const selection = JSON.parse(json) as { topic?: unknown };
-      topic = typeof selection.topic === "string" ? selection.topic : "";
+      const gemini = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
+        signal: AbortSignal.timeout(15000),
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: "Classify the user's question for a grounded Hyderabad heat companion. Return only strict JSON with one topic. Allowed topics: conditions, humidity, forecast, official_warning, water, guidance. Never answer the question, add facts, or infer health advice." }] },
+          contents: [{ role: "user", parts: [{ text: question }] }],
+          generationConfig: {
+            temperature: 0,
+            maxOutputTokens: 120,
+            responseMimeType: "application/json",
+            responseSchema: { type: "OBJECT", properties: { topic: { type: "STRING", enum: Object.keys(topicFactIds) } }, required: ["topic"] },
+          },
+        }),
+      });
+      if (gemini.ok) {
+        const rawSelection = modelText(await gemini.json());
+        try {
+          const json = rawSelection.match(/\{[\s\S]*\}/)?.[0] ?? rawSelection;
+          const selection = JSON.parse(json) as { topic?: unknown };
+          const selectedTopic = typeof selection.topic === "string" ? selection.topic : "";
+          if (topicFactIds[selectedTopic]) topic = selectedTopic;
+        } catch {
+          const selectedTopic = Object.keys(topicFactIds).find((item) => rawSelection.includes(item));
+          if (selectedTopic) topic = selectedTopic;
+        }
+      }
     } catch {
-      topic = Object.keys(topicFactIds).find((item) => rawSelection.includes(item)) ?? "";
+      // Gemini only chooses a topic. The local classifier keeps sourced facts available during outages.
     }
-    if (!topicFactIds[topic]) topic = classifyQuestion(question);
     const ids = topicFactIds[topic] ?? [];
     const selected = ids.map((id) => facts.find((fact) => fact.id === id)).filter((fact): fact is Fact => Boolean(fact));
     if (!selected.length) throw new Error("selection");
