@@ -77,8 +77,8 @@ function buildFacts(outlook: Outlook, water: Water): Fact[] {
 }
 
 function modelText(payload: unknown) {
-  const data = payload as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
-  return data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+  const data = payload as { choices?: Array<{ message?: { content?: string | null } }> };
+  return data.choices?.[0]?.message?.content ?? "";
 }
 
 function classifyQuestion(question: string): string {
@@ -92,9 +92,8 @@ function classifyQuestion(question: string): string {
 }
 
 export async function POST(request: NextRequest) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = process.env.GROQ_API_KEY;
   const baseUrl = process.env.VERYHOT_API_BASE_URL?.replace(/\/$/, "");
-  if (!apiKey) return NextResponse.json({ error: "The sun companion is not configured on this deployment." }, { status: 503 });
   if (!baseUrl) return NextResponse.json({ error: "The live outlook service is not configured." }, { status: 500 });
 
   const body = await request.json().catch(() => null) as { question?: unknown; lat?: unknown; lon?: unknown } | null;
@@ -114,7 +113,7 @@ export async function POST(request: NextRequest) {
     if (!outlookResponse.ok || !waterResponse.ok) throw new Error("upstream");
     const [outlook, water] = [await outlookResponse.json() as Outlook, await waterResponse.json() as Water];
     const facts = buildFacts(outlook, water);
-    const model = process.env.GEMINI_MODEL ?? "gemini-3.6-flash";
+    const model = process.env.GROQ_MODEL ?? "qwen/qwen3.8-27b";
     const topicFactIds: Record<string, string[]> = {
       conditions: ["current-conditions", "assessment"],
       humidity: ["current-conditions", "peak-humidity", "guidance-0"],
@@ -124,24 +123,24 @@ export async function POST(request: NextRequest) {
       guidance: ["assessment", "guidance-0", "guidance-1", "precaution-0", "precaution-1"],
     };
     let topic = classifyQuestion(question);
-    try {
-      const gemini = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`, {
+    if (apiKey) try {
+      const groq = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        signal: AbortSignal.timeout(15000),
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        signal: AbortSignal.timeout(20000),
         body: JSON.stringify({
-          systemInstruction: { parts: [{ text: "Classify the user's question for a grounded Hyderabad heat companion. Return only strict JSON with one topic. Allowed topics: conditions, humidity, forecast, official_warning, water, guidance. Never answer the question, add facts, or infer health advice." }] },
-          contents: [{ role: "user", parts: [{ text: question }] }],
-          generationConfig: {
-            temperature: 0,
-            maxOutputTokens: 120,
-            responseMimeType: "application/json",
-            responseSchema: { type: "OBJECT", properties: { topic: { type: "STRING", enum: Object.keys(topicFactIds) } }, required: ["topic"] },
-          },
+          model,
+          messages: [
+            { role: "system", content: `Classify the user's question for a grounded Hyderabad heat companion. Return only JSON with one string property named topic. Allowed values: ${Object.keys(topicFactIds).join(", ")}. Never answer, add facts, or infer health advice.` },
+            { role: "user", content: question },
+          ],
+          temperature: 0.2,
+          max_completion_tokens: 100,
+          response_format: { type: "json_object" },
         }),
       });
-      if (gemini.ok) {
-        const rawSelection = modelText(await gemini.json());
+      if (groq.ok) {
+        const rawSelection = modelText(await groq.json());
         try {
           const json = rawSelection.match(/\{[\s\S]*\}/)?.[0] ?? rawSelection;
           const selection = JSON.parse(json) as { topic?: unknown };
@@ -151,14 +150,16 @@ export async function POST(request: NextRequest) {
           const selectedTopic = Object.keys(topicFactIds).find((item) => rawSelection.includes(item));
           if (selectedTopic) topic = selectedTopic;
         }
+      } else {
+        console.warn("grounded_companion_selection_unavailable", { status: groq.status });
       }
     } catch {
-      // Gemini only chooses a topic. The local classifier keeps sourced facts available during outages.
+      // Groq only chooses a topic. The local classifier keeps sourced facts available during outages.
     }
     const ids = topicFactIds[topic] ?? [];
     const selected = ids.map((id) => facts.find((fact) => fact.id === id)).filter((fact): fact is Fact => Boolean(fact));
     if (!selected.length) throw new Error("selection");
-    return NextResponse.json({ facts: selected, model }, { headers: { "Cache-Control": "no-store" } });
+    return NextResponse.json({ facts: selected, model: apiKey ? model : "local-topic-fallback" }, { headers: { "Cache-Control": "no-store" } });
   } catch (error) {
     console.error("grounded_companion_failure", { reason: error instanceof Error ? error.message : "unknown" });
     return NextResponse.json({ error: "The sun companion could not retrieve a grounded answer. Try again shortly." }, { status: 502 });

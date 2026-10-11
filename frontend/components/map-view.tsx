@@ -25,7 +25,7 @@ export default function MapView({ center, locations, selected, onSelect }: Props
     setWorkerUrl(new URL("maplibre-gl/dist/maplibre-gl-worker.mjs", import.meta.url).toString());
     const map = new Map({
       container: hostRef.current,
-      style: "https://tiles.openfreemap.org/styles/dark",
+      style: "https://tiles.openfreemap.org/styles/bright",
       center: INITIAL_VIEW,
       zoom: 11,
       attributionControl: false,

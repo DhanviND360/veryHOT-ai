@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import "./companion.css";
+import "./theme.css";
 
 export const metadata: Metadata = {
   title: "veryHOT.ai — Hyderabad heat intelligence",
@@ -10,7 +11,7 @@ export const metadata: Metadata = {
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#111311",
+  themeColor: "#f6f0e7",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {

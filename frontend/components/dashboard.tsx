@@ -3,6 +3,7 @@
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import SunCompanion from "@/components/sun-companion";
+import SunWelcome from "@/components/sun-welcome";
 import type { GeocodeResult, OutlookResponse, SourceMetadata, WaterLocation, WaterLocationsResponse } from "@/lib/types";
 
 const MapView = dynamic(() => import("@/components/map-view"), {
@@ -42,6 +43,7 @@ export default function Dashboard() {
   const [errors, setErrors] = useState<LoadError>({});
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
+  const [mapOpen, setMapOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [places, setPlaces] = useState<GeocodeResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -188,6 +190,10 @@ export default function Dashboard() {
   }, [outlook?.hourly]);
   const exposurePrecautions = useMemo(() => outlook?.precautions.filter((item) => /vulnerable|outdoor|strenuous|shade/i.test(item)) ?? [], [outlook?.precautions]);
 
+  if (!mapOpen) {
+    return <SunWelcome outlook={outlook} loading={loading} error={errors.outlook} onRetry={refreshLocation} onMore={() => setMapOpen(true)} />;
+  }
+
   return (
     <main className="dashboard">
       <MapView center={center} locations={water?.locations ?? []} selected={selected} onSelect={setSelected} />
@@ -203,6 +209,7 @@ export default function Dashboard() {
             {searchError ? <div className="search-empty" role="status">{searchError}</div> : places.map((place) => <button type="button" role="option" key={place.place_id} onClick={() => choosePlace(place)}>{place.display_name}</button>)}
           </div>}
         </form>
+        <button className="sun-summary-button" type="button" onClick={() => setMapOpen(false)}>Sun report</button>
         <button className="refresh-button" type="button" onClick={refreshLocation} disabled={loading} aria-label="Refresh live data" title="Refresh live data">↻</button>
       </header>
 
