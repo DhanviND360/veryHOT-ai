@@ -2,6 +2,7 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import SunCompanion from "@/components/sun-companion";
 import type { GeocodeResult, OutlookResponse, SourceMetadata, WaterLocation, WaterLocationsResponse } from "@/lib/types";
 
 const MapView = dynamic(() => import("@/components/map-view"), {
@@ -130,6 +131,7 @@ export default function Dashboard() {
   }, [search]);
 
   const verifiedWater = useMemo(() => water?.locations.filter((item) => item.verification_status.trim().toLowerCase() === "verified") ?? [], [water]);
+  const unverifiedWater = useMemo(() => water?.locations.filter((item) => item.verification_status.trim().toLowerCase() !== "verified") ?? [], [water]);
   const current = outlook?.current;
   const assessment = outlook?.heat_assessment;
   const warning = outlook?.official_warning;
@@ -176,10 +178,19 @@ export default function Dashboard() {
   const locationTitle = outlook?.location.display_name === "Requested coordinates"
     ? requestedLabel ?? "Selected location"
     : outlook?.location.display_name ?? requestedLabel ?? (loading ? "Loading location…" : "Location unavailable");
+  const hourlyWindow = useMemo(() => {
+    if (!outlook?.hourly.length) return null;
+    const usable = outlook.hourly.filter((hour) => hour.relative_humidity_pct != null || hour.apparent_temperature_c != null);
+    if (!usable.length) return null;
+    const mostHumid = usable.reduce((best, hour) => (hour.relative_humidity_pct ?? -Infinity) > (best.relative_humidity_pct ?? -Infinity) ? hour : best);
+    const hottest = usable.reduce((best, hour) => (hour.apparent_temperature_c ?? -Infinity) > (best.apparent_temperature_c ?? -Infinity) ? hour : best);
+    return { mostHumid, hottest };
+  }, [outlook?.hourly]);
+  const exposurePrecautions = useMemo(() => outlook?.precautions.filter((item) => /vulnerable|outdoor|strenuous|shade/i.test(item)) ?? [], [outlook?.precautions]);
 
   return (
     <main className="dashboard">
-      <MapView center={center} locations={verifiedWater} selected={selected} onSelect={setSelected} />
+      <MapView center={center} locations={water?.locations ?? []} selected={selected} onSelect={setSelected} />
       <header className="topbar">
         <a className="brand" href="#home" aria-label="veryHOT.ai home"><span className="brand-mark" aria-hidden="true">v</span><span>veryHOT<span className="brand-dot">.</span>ai</span></a>
         <form className="search-wrap" onSubmit={submitSearch} role="search">
@@ -227,15 +238,17 @@ export default function Dashboard() {
 
       {selected && <section className="detail-card" aria-live="polite" aria-label="Water point details">
         <button className="close-detail" type="button" onClick={() => setSelected(null)} aria-label="Close water point details">×</button>
-        <div className="eyebrow verified-label"><span className="verified-dot" />VERIFIED WATER POINT</div>
+        <div className={`eyebrow ${selected.verification_status.trim().toLowerCase() === "verified" ? "verified-label" : "unverified-label"}`}><span className={selected.verification_status.trim().toLowerCase() === "verified" ? "verified-dot" : "unverified-dot"} />{selected.verification_status.trim().toLowerCase() === "verified" ? "VERIFIED WATER POINT" : "UNVERIFIED WATER POINT"}</div>
         <h2>{selected.name}</h2>
         {selected.address && <p>{selected.address}</p>}
-        <div className="detail-meta">Status: {selected.verification_status}{selected.last_verified_at ? ` · Verified ${dateTime(selected.last_verified_at) ?? selected.last_verified_at}` : " · Verification time not provided"}</div>
+        <div className="detail-meta">Status: {selected.verification_status}{selected.last_verified_at ? ` · Verified ${dateTime(selected.last_verified_at) ?? selected.last_verified_at}` : " · Not reviewed as verified"}</div>
       </section>}
 
       <div className="map-legend" aria-live="polite">
-        <span className="legend-dot" />{verifiedWater.length ? `${verifiedWater.length} verified water point${verifiedWater.length === 1 ? "" : "s"}` : errors.water || water?.availability_status === "unavailable" ? "Water point data unavailable" : "No verified water points returned"}
+        <span className="legend-dot" />{water?.availability_status === "available" ? `${verifiedWater.length} verified · ${unverifiedWater.length} unverified` : errors.water || water?.availability_status === "unavailable" ? "Water point data unavailable" : "No verified water points returned"}
       </div>
+
+      <SunCompanion lat={center[1]} lon={center[0]} disabled={loading || Boolean(errors.outlook)} panelOpen={panelOpen} />
 
       <section className={`bottom-panel ${panelOpen ? "is-open" : ""}`} aria-label="Forecast and safety guidance">
         <button className="panel-toggle" type="button" onClick={() => setPanelOpen((open) => !open)} aria-expanded={panelOpen} aria-controls="panel-content">
@@ -248,10 +261,12 @@ export default function Dashboard() {
             <div className="forecast-section">
               <div className="section-heading"><div><span className="eyebrow">HOURLY OUTLOOK</span><p>{weatherSource ? sourceLine(weatherSource) : "Values appear when the weather source responds."}</p></div></div>
               {errors.outlook ? <p className="empty-copy">Hourly outlook could not be loaded.</p> : outlook?.hourly.length ? <div className="hour-grid">{outlook.hourly.slice(0, 12).map((hour, index) => <div className="hour-cell" key={`${hour.timestamp}-${index}`}><span>{localTime(hour.timestamp) ?? "—"}</span><b>{numberText(hour.apparent_temperature_c)}°</b><small>{numberText(hour.temperature_c)}° air</small></div>)}</div> : <p className="empty-copy">{loading ? "Loading live forecast…" : "No hourly forecast was returned."}</p>}
+              {hourlyWindow && <div className="hourly-guidance" aria-label="Humidity-aware hourly heat guidance"><span>HUMIDITY-AWARE READ</span><p>Highest returned humidity is <b>{numberText(hourlyWindow.mostHumid.relative_humidity_pct)}%</b> at {localTime(hourlyWindow.mostHumid.timestamp) ?? "the recorded hour"}. The highest apparent temperature is <b>{numberText(hourlyWindow.hottest.apparent_temperature_c)}°C</b> at {localTime(hourlyWindow.hottest.timestamp) ?? "the recorded hour"}.</p><small>{assessment?.guidance[0] ?? "No published guidance was returned."}</small></div>}
             </div>
             <div className="guidance-section">
               <div className="section-heading"><div><span className="eyebrow">SAFETY GUIDANCE</span><p>veryHOT.ai assessment</p></div></div>
               {errors.outlook ? <p className="empty-copy">Guidance is unavailable while the outlook service is offline.</p> : assessment?.guidance.length ? <ul>{assessment.guidance.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p className="empty-copy">No guidance was returned for this location.</p>}
+              <div className="exposure-guidance"><span className="eyebrow">EXPOSURE-AWARE PRECAUTIONS</span>{exposurePrecautions.length ? <ul>{exposurePrecautions.map((item, index) => <li key={index}>{item}</li>)}</ul> : <p>No vulnerability-specific precaution was returned for this assessment. The app does not infer personal health needs.</p>}</div>
               {assessment?.methodology && <details><summary>About this assessment</summary><p>{assessment.methodology}</p>{assessment.limitations.map((item, index) => <p key={index} className="limitation">{item}</p>)}</details>}
             </div>
           </div>

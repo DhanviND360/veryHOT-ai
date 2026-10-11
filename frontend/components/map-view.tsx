@@ -55,12 +55,12 @@ export default function MapView({ center, locations, selected, onSelect }: Props
     markersRef.current = [];
     const map = mapRef.current;
     if (!map) return;
-    const verified = locations.filter((item) => item.verification_status.trim().toLowerCase() === "verified");
-    for (const location of verified) {
+    for (const location of locations) {
+      const verified = location.verification_status.trim().toLowerCase() === "verified";
       const button = document.createElement("button");
       button.type = "button";
-      button.className = "water-marker";
-      button.setAttribute("aria-label", `Verified water point: ${location.name}`);
+      button.className = `water-marker ${verified ? "is-verified" : "is-unverified"}`;
+      button.setAttribute("aria-label", `${verified ? "Verified" : "Unverified"} water point: ${location.name}`);
       button.title = location.name;
       button.addEventListener("click", () => onSelect(location));
       const marker = new Marker({ element: button, anchor: "center" })
