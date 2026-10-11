@@ -2,8 +2,8 @@
 
 import dynamic from "next/dynamic";
 import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import LandingPage from "@/components/landing-page";
 import SunCompanion from "@/components/sun-companion";
-import SunWelcome from "@/components/sun-welcome";
 import type { GeocodeResult, OutlookResponse, SourceMetadata, WaterLocation, WaterLocationsResponse } from "@/lib/types";
 
 const MapView = dynamic(() => import("@/components/map-view"), {
@@ -43,7 +43,6 @@ export default function Dashboard() {
   const [errors, setErrors] = useState<LoadError>({});
   const [loading, setLoading] = useState(true);
   const [panelOpen, setPanelOpen] = useState(false);
-  const [mapOpen, setMapOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [places, setPlaces] = useState<GeocodeResult[]>([]);
   const [searching, setSearching] = useState(false);
@@ -190,12 +189,11 @@ export default function Dashboard() {
   }, [outlook?.hourly]);
   const exposurePrecautions = useMemo(() => outlook?.precautions.filter((item) => /vulnerable|outdoor|strenuous|shade/i.test(item)) ?? [], [outlook?.precautions]);
 
-  if (!mapOpen) {
-    return <SunWelcome outlook={outlook} loading={loading} error={errors.outlook} onRetry={refreshLocation} onMore={() => setMapOpen(true)} />;
-  }
-
   return (
-    <main className="dashboard">
+    <LandingPage outlook={outlook} water={water} loading={loading} errors={errors}>
+    <section className="live-check-section" id="heat-check" aria-labelledby="live-check-title">
+      <div className="live-check-heading"><span className="section-index">LIVE HYDERABAD OUTLOOK</span><h2 id="live-check-title">A clearer read on <em>your corner.</em></h2><p>Live weather, supplementary heat assessment, official warning status and returned water locations.</p></div>
+    <div className="dashboard">
       <MapView center={center} locations={water?.locations ?? []} selected={selected} onSelect={setSelected} />
       <header className="topbar">
         <a className="brand" href="#home" aria-label="veryHOT.ai home"><span className="brand-mark" aria-hidden="true">v</span><span>veryHOT<span className="brand-dot">.</span>ai</span></a>
@@ -209,7 +207,6 @@ export default function Dashboard() {
             {searchError ? <div className="search-empty" role="status">{searchError}</div> : places.map((place) => <button type="button" role="option" key={place.place_id} onClick={() => choosePlace(place)}>{place.display_name}</button>)}
           </div>}
         </form>
-        <button className="sun-summary-button" type="button" onClick={() => setMapOpen(false)}>Sun report</button>
         <button className="refresh-button" type="button" onClick={refreshLocation} disabled={loading} aria-label="Refresh live data" title="Refresh live data">↻</button>
       </header>
 
@@ -267,7 +264,7 @@ export default function Dashboard() {
           <div className="panel-columns">
             <div className="forecast-section">
               <div className="section-heading"><div><span className="eyebrow">HOURLY OUTLOOK</span><p>{weatherSource ? sourceLine(weatherSource) : "Values appear when the weather source responds."}</p></div></div>
-              {errors.outlook ? <p className="empty-copy">Hourly outlook could not be loaded.</p> : outlook?.hourly.length ? <div className="hour-grid">{outlook.hourly.slice(0, 12).map((hour, index) => <div className="hour-cell" key={`${hour.timestamp}-${index}`}><span>{localTime(hour.timestamp) ?? "—"}</span><b>{numberText(hour.apparent_temperature_c)}°</b><small>{numberText(hour.temperature_c)}° air</small></div>)}</div> : <p className="empty-copy">{loading ? "Loading live forecast…" : "No hourly forecast was returned."}</p>}
+              {errors.outlook ? <p className="empty-copy">Hourly outlook could not be loaded.</p> : outlook?.hourly.length ? <div className="hour-grid">{outlook.hourly.slice(0, 24).map((hour, index) => <div className="hour-cell" key={`${hour.timestamp}-${index}`}><span>{localTime(hour.timestamp) ?? "—"}</span><b>{numberText(hour.apparent_temperature_c)}°</b><small>{numberText(hour.temperature_c)}° air</small></div>)}</div> : <p className="empty-copy">{loading ? "Loading live forecast…" : "No hourly forecast was returned."}</p>}
               {hourlyWindow && <div className="hourly-guidance" aria-label="Humidity-aware hourly heat guidance"><span>HUMIDITY-AWARE READ</span><p>Highest returned humidity is <b>{numberText(hourlyWindow.mostHumid.relative_humidity_pct)}%</b> at {localTime(hourlyWindow.mostHumid.timestamp) ?? "the recorded hour"}. The highest apparent temperature is <b>{numberText(hourlyWindow.hottest.apparent_temperature_c)}°C</b> at {localTime(hourlyWindow.hottest.timestamp) ?? "the recorded hour"}.</p><small>{assessment?.guidance[0] ?? "No published guidance was returned."}</small></div>}
             </div>
             <div className="guidance-section">
@@ -288,6 +285,8 @@ export default function Dashboard() {
       </section>
 
       <div className="map-credit">Map data © OpenStreetMap · Geocoding © OpenStreetMap contributors</div>
-    </main>
+    </div>
+    </section>
+    </LandingPage>
   );
 }

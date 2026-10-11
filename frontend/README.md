@@ -13,7 +13,7 @@ Set `VERYHOT_API_BASE_URL` in `frontend/.env.local` to the deployed API base URL
 
 To enable Groq topic selection for the grounded Sun companion, also set `GROQ_API_KEY` and `GROQ_MODEL=qwen/qwen3.8-27b`. Both are read only by the server route. Groq classifies the question; the displayed answer is assembled from facts returned by the weather and water APIs. If Groq is unavailable or not configured, a small local topic classifier keeps sourced answers available. The browser never receives the key or direct Groq access.
 
-The first screen is a light, animated sun report built from the live outlook response. **More** opens the existing map, forecast, water points, and safety guidance.
+The landing page pairs the live API status with an editorial Hyderabad heat illustration. Its warm map textures are explicitly marked as illustration and are not live heat measurements. **Check my heat outlook** and **More of your outlook** lead to the existing interactive map, forecast, water points, and safety guidance.
 
 ## Vercel
 
